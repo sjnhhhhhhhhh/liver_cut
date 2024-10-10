@@ -372,7 +372,7 @@ int main() {
     auto rb3v = reader3->GetOutput();
     auto rf_up_v = reader4->GetOutput();
     auto rf_down_v = reader5->GetOutput();
-    auto exc_rfd = mergePolyData(rb1v,rf_down_v);
+    auto exc_rfd = mergePolyData(rb1v, rb2v, rb3v, rf_up_v, left_inside_v, left_od_v, rf_down_v,tail);
     //auto left_side = mergePolyData(left_inside_v,tail);
 
 
@@ -397,7 +397,7 @@ int main() {
 
 
     auto pointsvector1 = extractpoints(exc_rfd);
-    auto pointsvector2 = extractpoints(rf_up_v);
+    auto pointsvector2 = extractpoints(left_ou_v);
 
     // 合并点集并标记点的归属
     auto points = mergePointSets(pointsvector1, pointsvector2);

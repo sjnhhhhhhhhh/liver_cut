@@ -123,6 +123,27 @@ vtkSmartPointer<vtkPolyData> mergePolyData(const PolyDataTypes&... inputs) {
     return mergedPolyData;
 }
 
+template <typename... PolyDataTypes>
+vtkSmartPointer<vtkPolyData> mergePolyData2(const PolyDataTypes&... inputs) {
+    auto appendFilter = vtkSmartPointer<vtkAppendPolyData>::New();
+
+    // 直接添加输入，无需使用 lambda
+    (appendFilter->AddInputData(inputs), ...);
+
+    appendFilter->Update();
+
+    // 使用 vtkCleanPolyData 来移除重复的点和单元
+    auto cleanFilter = vtkSmartPointer<vtkCleanPolyData>::New();
+    cleanFilter->SetInputConnection(appendFilter->GetOutputPort());
+    cleanFilter->Update();
+
+    auto mergedPolyData = vtkSmartPointer<vtkPolyData>::New();
+    mergedPolyData->ShallowCopy(cleanFilter->GetOutput());
+
+    return mergedPolyData;
+}
+
+
 // 对点集进行均匀采样
 std::vector<Eigen::Vector3d> uniformSampling(const std::vector<Eigen::Vector3d>& points, size_t num_samples);
 
@@ -141,10 +162,9 @@ vtkSmartPointer<vtkPolyData> denoisePointCloud(vtkSmartPointer<vtkPolyData> inpu
 // 使用隐式平面切割肝脏模型，返回切割后的主要部分和被切下的小块
 std::tuple<vtkSmartPointer<vtkPolyData>, vtkSmartPointer<vtkPolyData>> cut_run2(vtkSmartPointer<vtkImplicitPolyDataDistance> implicitFunction, vtkSmartPointer<vtkPolyData> liver,double (&mbounds)[6]);
 
-vtkSmartPointer<vtkPolyData> fillHoles(vtkSmartPointer<vtkPolyData> inputPolyData);
+//std::tuple<vtkSmartPointer<vtkPolyData>,vtkSmartPointer<vtkPolyData>> cut_run3(vtkSmartPointer<vtkImplicitPolyDataDistance> implicitFunction, vtkSmartPointer<vtkPolyData> liver,double (&mbounds)[6]);
 
-vtkSmartPointer<vtkPolyData> mergeCuttingPlane(vtkSmartPointer<vtkPolyData> inputPolyData,vtkSmartPointer<vtkImplicitPolyDataDistance> imp,double (&mbounds)[6]);
-vtkSmartPointer<vtkPolyData> fillHolesWithIntersection(vtkSmartPointer<vtkPolyData> inputPolyData,vtkSmartPointer<vtkImplicitPolyDataDistance> imp,double (&mbounds)[6]);
+vtkSmartPointer<vtkPolyData> append(vtkSmartPointer<vtkPolyData> p1,vtkSmartPointer<vtkPolyData> p2);
 
 // 找到两个输入模型中的点并进行处理，返回去噪后的点和过滤点
 std::tuple<vtkSmartPointer<vtkPolyData>, std::vector<Eigen::Vector3d>> find_points(vtkSmartPointer<vtkPolyData> input1, vtkSmartPointer<vtkPolyData> input2);

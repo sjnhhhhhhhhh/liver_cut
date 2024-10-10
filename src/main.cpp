@@ -108,51 +108,76 @@ int main() {
     auto tail = reader9->GetOutput();
     
 // 由于没给我整个肝脏的stl，我只能自己合并下了，你要是有的话就删了吧
-    vtkSmartPointer<vtkSTLReader> reader10 = vtkSmartPointer<vtkSTLReader>::New();
+// 现在零散的STL本身分好段的，每个段自己是有封闭的，我现在一合并然后一切割就乱了，以后如果有不带封闭的肝脏STL可能效果可以还行，现在我没有拿到干净的数据所以不得而知，你技术肯定比我一破实习生强，自己弄下吧
+// 而且照理来说我要处理的也不应该是一个由分好段的肝段合并而来的肝脏，我都切好肝段了为什么要再切一遍？
+// 真实情况我拿到的肯定是一个整体扫描数据对吧，我不知道你们是怎么拿到STL的，反正我的工作内容就是从STL开始的，前面怎么处理我不会我也不管，总之去除肝脏内表面这个任务就不应该出现，毫无意义，我觉得我没必要在一个毫无意义的问题上浪费时间
+// 如果你看到了这段注释，我相信你理解我意思，我没急啊，我只是觉得通过注释交流挺好玩的，毕竟我还没真正上过班
+// 之前在论坛上看见过跑路的程序员用注释提醒接盘侠这是屎山，而我写的程序里也包含了部分屎山，主要是一些我后来没用上但懒得删的函数，不过都有注释，算不上真屎山，本来也没几百行代码
+// 头文件该删的也可以删，我懒得删
+// 而且我写的算法说实话挺恶心的，毕竟我用vtk也是三个月前刚开始，用三角化避免无效点对是我能想到的仅有办法了
+// 如果公司真把我的代码用作参考的话我还挺荣幸的
+
+
+   /*vtkSmartPointer<vtkSTLReader> reader10 = vtkSmartPointer<vtkSTLReader>::New();
     reader10->SetFileName("C:/code/liver_cut/data/liver.stl");
     reader10->Update();
     auto liver = reader10->GetOutput();
     double mbounds_liver[6];
-    liver->GetBounds(mbounds_liver);
-    /*vtkSmartPointer<vtkPolyData> liver = vtkSmartPointer<vtkPolyData>::New();
+    liver->GetBounds(mbounds_liver);*/
+    vtkSmartPointer<vtkPolyData> liver = vtkSmartPointer<vtkPolyData>::New();
         vtkSmartPointer<vtkSTLReader> reader10 = vtkSmartPointer<vtkSTLReader>::New();
         reader10->SetFileName("C:/code/liver_cut/data/1.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
 
         reader10->SetFileName("C:/code/liver_cut/data/2.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
 
         reader10->SetFileName("C:/code/liver_cut/data/3.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
 
         reader10->SetFileName("C:/code/liver_cut/data/4a.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
 
         reader10->SetFileName("C:/code/liver_cut/data/4b.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
 
         reader10->SetFileName("C:/code/liver_cut/data/5.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
 
         reader10->SetFileName("C:/code/liver_cut/data/6.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
         
         reader10->SetFileName("C:/code/liver_cut/data/7.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());
+        liver = mergePolyData2(liver,reader10->GetOutput());
 
         reader10->SetFileName("C:/code/liver_cut/data/8.stl");
         reader10->Update();
-        liver = mergePolyData(liver,reader10->GetOutput());   */
+        liver = mergePolyData2(liver,reader10->GetOutput());   
 
-        std::cout<<liver->GetNumberOfPoints()<<"\n";
+        // 使用 vtkCleanPolyData 来移除重复的点和单元
+        auto cleanFilter = vtkSmartPointer<vtkCleanPolyData>::New();
+        cleanFilter->SetInputData(liver);
+        cleanFilter->Update();
+
+        auto liver_cl = vtkSmartPointer<vtkPolyData>::New();
+        liver_cl->ShallowCopy(cleanFilter->GetOutput());
+
+        double mbounds_liver[6];
+        liver_cl->GetBounds(mbounds_liver);
+
+        std::cout<<liver_cl->GetNumberOfPoints()<<"\n";
+        vtkSmartPointer<vtkSTLWriter> stlWriter = vtkSmartPointer<vtkSTLWriter>::New();
+        stlWriter->SetFileName("C:/code/liver_cut/new_stl/liver_clean.stl");
+        stlWriter->SetInputData(liver_cl);
+        stlWriter->Write();
 
     // 提取读取的数据
     auto rb1v = reader1->GetOutput();
@@ -163,7 +188,7 @@ int main() {
 
     // 依次调用每个切割函数
     // 切出尾状段
-    auto liver1 = cut_tail(liver, rb1v, rb2v, rb3v, rf_up_v, rf_down_v, left_inside_v, left_ou_v, left_od_v, tail,mbounds_liver);
+    auto liver1 = cut_tail(liver_cl, rb1v, rb2v, rb3v, rf_up_v, rf_down_v, left_inside_v, left_ou_v, left_od_v, tail,mbounds_liver);
     // 提取右半叶
     auto [liver_right,liver_left_pre] = cut_right_lobe(liver, rb1v, rb2v, rb3v, rf_up_v, rf_down_v, left_inside_v, tail,mbounds_liver);
     // 提取左半叶

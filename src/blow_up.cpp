@@ -8,6 +8,8 @@
 #include <vector>
 #include <string>
 
+
+
 // 计算单个 vtkPolyData 的质心
 Eigen::Vector3d cal_centroid(const vtkSmartPointer<vtkPolyData>& segmentPolyData) {
     Eigen::Vector3d overallCentroid(0.0, 0.0, 0.0);
@@ -93,7 +95,7 @@ int main() {
     std::unordered_map<std::string, vtkSmartPointer<vtkPolyData>> segmentsPolyData;
 
     // 定义分段名称和对应的文件名
-    std::vector<std::pair<std::string, std::string>> segmentFiles = {
+    /*std::vector<std::pair<std::string, std::string>> segmentFiles = {
         {"tail", "C:/code/liver_cut/new_stl/tail.stl"},
         {"rb1b", "C:/code/liver_cut/new_stl/rb1b.stl"},
         {"rb2b", "C:/code/liver_cut/new_stl/rb2b.stl"},
@@ -103,7 +105,21 @@ int main() {
         {"left_inside", "C:/code/liver_cut/new_stl/left_inside.stl"},
         {"left_ou", "C:/code/liver_cut/new_stl/left_ou.stl"},
         {"left_od", "C:/code/liver_cut/new_stl/left_od.stl"}
+    };*/
+
+    std::vector<std::pair<std::string, std::string>> segmentFiles = {
+        {"tail", "C:/code/liver_cut/data/1.stl"},
+        {"rb1b", "C:/code/liver_cut/data/2.stl"},
+        {"rb2b", "C:/code/liver_cut/data/5.stl"},
+        {"rb3b", "C:/code/liver_cut/data/3.stl"},
+        {"rf_up", "C:/code/liver_cut/data/8.stl"},
+        {"rf_down", "C:/code/liver_cut/data/4b.stl"},
+        {"left_inside", "C:/code/liver_cut/data/4a.stl"},
+        {"left_ou", "C:/code/liver_cut/data/6.stl"},
+        {"left_od", "C:/code/liver_cut/data/7.stl"}
     };
+
+
 
     // 读取每个分段的 STL 文件并存入哈希表
     for (const auto& pair : segmentFiles) {

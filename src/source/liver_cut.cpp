@@ -1,3 +1,5 @@
+//目前更换了添加了封闭功能的cut_run2，目前可以较为精准的封闭肝段
+//但问题是肝段目前的数据集内部有残留，不够干净，因此在反向切割切面时有一些纰漏，需要更新的数据集后才能实验
 #include "liver_cut.h"
 #include <vtkSmartPointer.h>
 #include <vtkRendererCollection.h>
@@ -50,6 +52,7 @@
 #include <vtkContourTriangulator.h>
 #include <vtkIntersectionPolyDataFilter.h>
 #include <vtkImplicitSelectionLoop.h>
+#include <vtkSelectPolyData.h>
 
 #include <iostream>
 #include <vector>
@@ -280,6 +283,7 @@ vtkSmartPointer<vtkPolyData> denoisePointCloud(vtkSmartPointer<vtkPolyData> inpu
     return denoisedPolyData;
 }
 
+//*******************************************这个是不带封闭的版本，可以正常运行************************************************* */
 std::tuple<vtkSmartPointer<vtkPolyData>,vtkSmartPointer<vtkPolyData>>cut_run2(vtkSmartPointer<vtkImplicitPolyDataDistance> implicitFunction, vtkSmartPointer<vtkPolyData> liver,double (&mbounds)[6]){
     // 1. 获取裁剪后的主要部分
     vtkSmartPointer<vtkClipPolyData> clipperMain = vtkSmartPointer<vtkClipPolyData>::New();
@@ -299,167 +303,15 @@ std::tuple<vtkSmartPointer<vtkPolyData>,vtkSmartPointer<vtkPolyData>>cut_run2(vt
 
     std::cout<<"start fill_holes\n";
 
-    // 3. 将裁剪面的 PolyData 合并到裁剪后的主要部分中
-    //vtkSmartPointer<vtkPolyData> closedMainModel = fillHolesWithIntersection(mainModel, implicitFunction,mbounds);
-
-    // 4. 同样地，将裁剪面的 PolyData 合并到切下的小块中
-    //vtkSmartPointer<vtkPolyData> closedCutOffPiece = fillHolesWithIntersection(cutOffPiece, implicitFunction,mbounds);
-
-
 
     return std::make_tuple(mainModel,cutOffPiece);
 
 }
 
-vtkSmartPointer<vtkPolyData> fillHoles(vtkSmartPointer<vtkPolyData> inputPolyData) {
-    // 提取边界边
-    vtkSmartPointer<vtkFeatureEdges> featureEdges = vtkSmartPointer<vtkFeatureEdges>::New();
-    featureEdges->SetInputData(inputPolyData);
-    featureEdges->BoundaryEdgesOn();
-    featureEdges->FeatureEdgesOff();
-    featureEdges->NonManifoldEdgesOff();
-    featureEdges->ManifoldEdgesOff();
-    featureEdges->Update();
-
-    vtkSmartPointer<vtkPolyData> boundaryEdges = featureEdges->GetOutput();
-
-    // 检查是否存在边界，如果没有，直接返回原模型
-    if (boundaryEdges->GetNumberOfPoints() == 0) {
-        return inputPolyData;
-    }
-
-    // 将边界线段连接成连续的多边形线
-    vtkSmartPointer<vtkStripper> stripper = vtkSmartPointer<vtkStripper>::New();
-    stripper->SetInputData(boundaryEdges);
-    stripper->Update();
-
-    vtkSmartPointer<vtkPolyData> boundaryLoops = vtkSmartPointer<vtkPolyData>::New();
-    boundaryLoops->SetPoints(stripper->GetOutput()->GetPoints());
-    boundaryLoops->SetLines(stripper->GetOutput()->GetLines());
-
-    // 创建一个用于存储所有填充多边形的 CellArray
-    vtkSmartPointer<vtkCellArray> polys = vtkSmartPointer<vtkCellArray>::New();
-
-    // 获取线段（边界环）
-    vtkSmartPointer<vtkCellArray> lines = boundaryLoops->GetLines();
-
-    // 创建一个 IdList 来存储点 ID
-    vtkSmartPointer<vtkIdList> idList = vtkSmartPointer<vtkIdList>::New();
-
-    // 遍历每个边界环
-    lines->InitTraversal();
-    while (lines->GetNextCell(idList)) {
-        vtkIdType npts = idList->GetNumberOfIds();
-
-        // 创建一个多边形
-        vtkSmartPointer<vtkPolygon> polygon = vtkSmartPointer<vtkPolygon>::New();
-        polygon->GetPointIds()->SetNumberOfIds(npts);
-        for (vtkIdType i = 0; i < npts; i++) {
-            polygon->GetPointIds()->SetId(i, idList->GetId(i));
-        }
-        polys->InsertNextCell(polygon);
-    }
-
-    // 创建一个 PolyData 来保存填充的孔洞面
-    vtkSmartPointer<vtkPolyData> filledHolesPolyData = vtkSmartPointer<vtkPolyData>::New();
-    filledHolesPolyData->SetPoints(boundaryLoops->GetPoints());
-    filledHolesPolyData->SetPolys(polys);
-
-    // 三角化填充的孔洞面
-    vtkSmartPointer<vtkTriangleFilter> triangleFilter = vtkSmartPointer<vtkTriangleFilter>::New();
-    triangleFilter->SetInputData(filledHolesPolyData);
-    triangleFilter->Update();
-
-    // 合并原始模型和填充的孔洞面
-    vtkSmartPointer<vtkAppendPolyData> appendFilter = vtkSmartPointer<vtkAppendPolyData>::New();
-    appendFilter->AddInputData(inputPolyData);
-    appendFilter->AddInputData(triangleFilter->GetOutput());
-    appendFilter->Update();
-
-    // 清理数据并重新计算法线
-    vtkSmartPointer<vtkCleanPolyData> cleanFilter = vtkSmartPointer<vtkCleanPolyData>::New();
-    cleanFilter->SetInputData(appendFilter->GetOutput());
-    cleanFilter->Update();
-
-    vtkSmartPointer<vtkPolyDataNormals> normalsFilter = vtkSmartPointer<vtkPolyDataNormals>::New();
-    normalsFilter->SetInputData(cleanFilter->GetOutput());
-    normalsFilter->ConsistencyOn();
-    normalsFilter->SplittingOff();
-    normalsFilter->Update();
-
-    vtkSmartPointer<vtkPolyData> closedSurface = normalsFilter->GetOutput();
-
-    return closedSurface;
-}
-
-vtkSmartPointer<vtkPolyData> mergeCuttingPlane(
-    vtkSmartPointer<vtkPolyData> inputPolyData,
-    vtkSmartPointer<vtkImplicitPolyDataDistance> imp,
-    double (&mbounds)[6]) {
-
-    // 在函数内部，将 imp 转换为基类指针
-    vtkImplicitFunction* implicitFunction = imp.GetPointer();
-
-    // 1. 使用 vtkCutter 计算模型与隐式函数的精确交线（缺口边界）
-    vtkSmartPointer<vtkCutter> cutter = vtkSmartPointer<vtkCutter>::New();
-    cutter->SetInputData(inputPolyData);
-    cutter->SetCutFunction(implicitFunction);
-    cutter->GenerateCutScalarsOff();
-    cutter->Update();
-
-    vtkSmartPointer<vtkPolyData> cutLines = cutter->GetOutput();
-
-    // 检查是否存在交线，如果没有，直接返回原模型
-    if (cutLines->GetNumberOfPoints() == 0) {
-        return inputPolyData;
-    }
-
-    // 2. 将交线连接成闭合的多边形环
-    vtkSmartPointer<vtkStripper> stripper = vtkSmartPointer<vtkStripper>::New();
-    stripper->SetInputData(cutLines);
-    stripper->JoinContiguousSegmentsOn();
-    stripper->Update();
-
-    vtkSmartPointer<vtkPolyData> loops = vtkSmartPointer<vtkPolyData>::New();
-    loops->SetPoints(stripper->GetOutput()->GetPoints());
-    loops->SetLines(stripper->GetOutput()->GetLines());
-
-    // 3. 使用 vtkContourTriangulator 对缺口边界进行三角化，填充孔洞
-    vtkSmartPointer<vtkContourTriangulator> triangulator = vtkSmartPointer<vtkContourTriangulator>::New();
-    triangulator->SetInputData(loops);
-    triangulator->Update();
-
-    vtkSmartPointer<vtkPolyData> holeFilling = triangulator->GetOutput();
-
-    // 4. 合并填充的孔洞面与原始模型
-    vtkSmartPointer<vtkAppendPolyData> appendFilter = vtkSmartPointer<vtkAppendPolyData>::New();
-    appendFilter->AddInputData(inputPolyData);
-    appendFilter->AddInputData(holeFilling);
-    appendFilter->Update();
-
-    // 5. 清理合并后的数据，移除重复点
-    vtkSmartPointer<vtkCleanPolyData> cleanFilter = vtkSmartPointer<vtkCleanPolyData>::New();
-    cleanFilter->SetInputData(appendFilter->GetOutput());
-    cleanFilter->SetTolerance(1e-6); // 根据需要调整容差
-    cleanFilter->Update();
-
-    // 6. 重新计算法线
-    vtkSmartPointer<vtkPolyDataNormals> normalsFilter = vtkSmartPointer<vtkPolyDataNormals>::New();
-    normalsFilter->SetInputData(cleanFilter->GetOutput());
-    normalsFilter->ConsistencyOn();
-    normalsFilter->SplittingOff();
-    normalsFilter->AutoOrientNormalsOn(); // 自动调整法线方向
-    normalsFilter->Update();
-
-    vtkSmartPointer<vtkPolyData> closedSurface = normalsFilter->GetOutput();
-
-    return closedSurface;
-}
-
-vtkSmartPointer<vtkPolyData> fillHolesWithIntersection(vtkSmartPointer<vtkPolyData> inputPolyData,vtkSmartPointer<vtkImplicitPolyDataDistance> imp,double (&mbounds)[6]) {
-
+//*******************************************这个是带封闭的版本，效果不好，可能是数据集不干净的问题************************************************* */
+/*std::tuple<vtkSmartPointer<vtkPolyData>,vtkSmartPointer<vtkPolyData>> cut_run2(vtkSmartPointer<vtkImplicitPolyDataDistance> implicitFunction, vtkSmartPointer<vtkPolyData> liver,double (&mbounds)[6]){
     vtkSmartPointer<vtkSampleFunction> sampleFunction = vtkSmartPointer<vtkSampleFunction>::New();
-    sampleFunction->SetImplicitFunction(imp); // 您的隐式函数
+    sampleFunction->SetImplicitFunction(implicitFunction); // 您的隐式函数
     sampleFunction->SetModelBounds(mbounds[0], mbounds[1], mbounds[2], mbounds[3], mbounds[4], mbounds[5]); // 设置采样范围
     sampleFunction->SetSampleDimensions(50, 50, 50); // 设置采样分辨率
     sampleFunction->ComputeNormalsOff();
@@ -469,90 +321,55 @@ vtkSmartPointer<vtkPolyData> fillHolesWithIntersection(vtkSmartPointer<vtkPolyDa
     contourFilter->SetInputConnection(sampleFunction->GetOutputPort());
     contourFilter->SetValue(0, 0.0); // 提取等值为 0 的面，即隐式函数的零等值面
     contourFilter->Update();
+    auto surface = contourFilter->GetOutput();
+    
+    // 2. 获取被切下的小块
+    vtkSmartPointer<vtkClipPolyData> clipperCut = vtkSmartPointer<vtkClipPolyData>::New();
+    clipperCut->SetInputData(liver);
+    clipperCut->SetClipFunction(implicitFunction);
+    clipperCut->SetInsideOut(true); // 保留内部部分
+    clipperCut->Update();
+    vtkSmartPointer<vtkPolyData> cutOffPiece = clipperCut->GetOutput();  
 
-    auto cuttingSurfacePolyData = contourFilter->GetOutput();
-
-    std::cout<<"imp_poly generating complete\n";
-
-    // 2. 使用 vtkIntersectionPolyDataFilter 计算交线
-    vtkSmartPointer<vtkIntersectionPolyDataFilter> intersectionFilter = vtkSmartPointer<vtkIntersectionPolyDataFilter>::New();
-    intersectionFilter->SetInputData(0, inputPolyData);
-    intersectionFilter->SetInputData(1, cuttingSurfacePolyData);
-    intersectionFilter->Update();
-
-    vtkSmartPointer<vtkPolyData> intersectionLines = intersectionFilter->GetOutput();
-    std::cout<<"intersection cal compeleted\n";
-
-    // 检查是否存在交线
-    if (intersectionLines->GetNumberOfPoints() == 0 || intersectionLines->GetNumberOfLines() == 0) {
-        std::cerr << "Error: No intersection lines found." << std::endl;
-        return inputPolyData;
-    }
-    // 3. 将交线连接成闭合的多边形环
-    vtkSmartPointer<vtkStripper> stripper = vtkSmartPointer<vtkStripper>::New();
-    stripper->SetInputData(intersectionLines);
-    stripper->JoinContiguousSegmentsOn();
-    stripper->Update();
-
-    vtkSmartPointer<vtkPolyData> loops = vtkSmartPointer<vtkPolyData>::New();
-    loops->SetPoints(stripper->GetOutput()->GetPoints());
-    loops->SetLines(stripper->GetOutput()->GetLines());
-
-    // 检查 loops 是否包含线单元
-    if (loops->GetNumberOfLines() == 0) {
-        std::cerr << "Error: No loops generated by vtkStripper." << std::endl;
-        return inputPolyData;
-    }
-    std::cout<<"loop generating completed\n";
-
-    // 4. 创建一个闭合的多边形（裁剪区域）
-    vtkSmartPointer<vtkPolyData> clippingRegion = vtkSmartPointer<vtkPolyData>::New();
-    clippingRegion->SetPoints(loops->GetPoints());
-    clippingRegion->SetPolys(loops->GetLines());
-    std::cout<<"cllipingregion completed\n";
-
-    // 5. 使用边界环创建 vtkImplicitSelectionLoop
-    vtkSmartPointer<vtkImplicitSelectionLoop> selectionLoop = vtkSmartPointer<vtkImplicitSelectionLoop>::New();
-    selectionLoop->SetLoop(clippingRegion->GetPoints());
-    std::cout<<"selectionLoop generating completed\n";
-
-    // 6. 使用 vtkClipPolyData 裁剪切割面，保留缺口范围内的部分
+    vtkSmartPointer<vtkImplicitPolyDataDistance> implicitCutoffpiece = vtkSmartPointer<vtkImplicitPolyDataDistance>::New();
+    implicitCutoffpiece->SetInput(cutOffPiece);  // 将肝段的主要部分转换为隐式函数
+    
+    // 使用裁剪后的肝段裁剪切割面
     vtkSmartPointer<vtkClipPolyData> clipper = vtkSmartPointer<vtkClipPolyData>::New();
-    clipper->SetInputData(cuttingSurfacePolyData);
-    clipper->SetClipFunction(selectionLoop);
-    clipper->SetInsideOut(true); // 保留内部部分
+    clipper->SetInputData(surface);  // 切割面
+    clipper->SetClipFunction(implicitCutoffpiece);  // 使用肝段的主要部分作为裁剪条件
+    clipper->SetInsideOut(true);  // 保留内部部分
     clipper->Update();
-    std::cout<<"cllip generating completed\n";
 
-    vtkSmartPointer<vtkPolyData> clippedCuttingSurface = clipper->GetOutput();
-    // 7. 合并裁剪后的切割面与裁剪后的肝脏模型
+    vtkSmartPointer<vtkPolyData> clippedCuttingSurface = clipper->GetOutput();  // 裁剪后的切割面
+  
+    
+    // 1. 获取裁剪后的主要部分
+    vtkSmartPointer<vtkClipPolyData> clipperMain = vtkSmartPointer<vtkClipPolyData>::New();
+    clipperMain->SetInputData(liver);
+    clipperMain->SetClipFunction(implicitFunction);
+    clipperMain->SetInsideOut(false); // 保留外部部分
+    clipperMain->Update();
+    vtkSmartPointer<vtkPolyData> mainModel = clipperMain->GetOutput();
+    
+    auto mainModel_closed = append(mainModel,clippedCuttingSurface);
+    auto cutOffPiece_closed = append(cutOffPiece,clippedCuttingSurface);
+
+
+
+
+    return std::make_tuple(mainModel_closed,cutOffPiece_closed);
+
+}*/
+
+vtkSmartPointer<vtkPolyData> append(vtkSmartPointer<vtkPolyData> p1,vtkSmartPointer<vtkPolyData> p2){
     vtkSmartPointer<vtkAppendPolyData> appendFilter = vtkSmartPointer<vtkAppendPolyData>::New();
-    appendFilter->AddInputData(inputPolyData);
-    appendFilter->AddInputData(clippedCuttingSurface);
+    appendFilter->AddInputData(p1);  // 添加切割后的模型
+    appendFilter->AddInputData(p2);  // 添加裁剪后的切割面
     appendFilter->Update();
-    std::cout<<"append generating completed\n";
 
-    // 8. 清理合并后的数据
-    vtkSmartPointer<vtkCleanPolyData> cleanFilter = vtkSmartPointer<vtkCleanPolyData>::New();
-    cleanFilter->SetInputData(appendFilter->GetOutput());
-    cleanFilter->SetTolerance(1e-6); // 根据需要调整容差
-    cleanFilter->Update();
-    std::cout<<"clean generating completed\n";
-
-    // 9. 重新计算法线
-    vtkSmartPointer<vtkPolyDataNormals> normalsFilter = vtkSmartPointer<vtkPolyDataNormals>::New();
-    normalsFilter->SetInputData(cleanFilter->GetOutput());
-    normalsFilter->ConsistencyOn();
-    normalsFilter->SplittingOff();
-    normalsFilter->AutoOrientNormalsOn(); // 自动调整法线方向
-    normalsFilter->Update();
-    std::cout<<"normals generating completed\n";
-
-    vtkSmartPointer<vtkPolyData> closedSurface = normalsFilter->GetOutput();
-    return closedSurface;
-
-
-
+    auto mergedPolyData = appendFilter->GetOutput();  // 合并后的模型
+    return mergedPolyData;
 }
 
 
