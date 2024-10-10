@@ -1,11 +1,3 @@
-// 由于没给我整个肝脏的stl，我只能自己合并下了，你要是有的话就删了吧
-// 现在零散的STL本身分好段的，每个段自己是有封闭的，我现在一合并然后一切割就乱了，以后如果有不带封闭的肝脏STL可能效果可以还行，现在我没有拿到干净的数据所以不得而知
-// 头文件该删的也可以删，但我觉得没必要
-// 我写的算法说实话有点慢的，毕竟我用vtk也是三个月前刚开始，用三角化避免无效点对是我能想到的仅有办法了，但这步实在跑起来太慢，我也优化不了，一个是因为数据结构学的一般，一个是因为调库我也没办法很快调整
-// 如果公司真把我的代码用作参考的话我还挺荣幸的
-
-
-// 如果你看程序切割效果不好，是因为现在用的是不怎么完美的带封闭的cut_run2，如果想要好看点的结果那就先别封闭，我挨着写了两个版本的cut_run2，把现在的注释掉用另一个
 #include <vtkSmartPointer.h>
 #include <vtkRendererCollection.h>
 #include <vtkPointPicker.h>
@@ -162,7 +154,7 @@ int main() {
         reader10->Update();
         liver = mergePolyData2(liver,reader10->GetOutput());   
 
-        // 使用 vtkCleanPolyData 来移除重复的点和单元
+        // 使用 vtkCleanPolyData 来移除重复的点和单元，实测做不到
         auto cleanFilter = vtkSmartPointer<vtkCleanPolyData>::New();
         cleanFilter->SetInputData(liver);
         cleanFilter->Update();
